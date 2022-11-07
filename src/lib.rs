@@ -1,40 +1,105 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use ::core::{marker::PhantomData, pin::Pin, task::{Context, Poll}};
-use ::core::future::Future;
+use core::future::Future;
+use core::marker::PhantomData;
+use core::pin::Pin;
+use core::task::{Context, Poll};
 
 #[cfg(feature = "std")]
 use futures::future::{BoxFuture, FutureExt, LocalBoxFuture};
 
+/// A [`Future`] wrapper that imposes a lower limit on the future's lifetime's duration.
+/// This is especially useful in combination with higher-tranked bounds when an lifetime
+/// bound is needed for the higher-ranked lifetime and a future is used in the bound.
+///
+/// # Example
+/// ```
+/// use futures::future::{ScopedBoxFuture, ScopedFutureExt};
+///
+/// pub struct Db {
+///     count: u8,
+/// }
+///
+/// impl Db {
+///     async fn transaction<'a, T: 'a, E: 'a, F: 'a>(&mut self, callback: F) -> Result<T, E>
+///     where
+///         F: for<'b> FnOnce(&'b mut Self) -> ScopedBoxFuture<'a, 'b, Result<T, E>> + Send,
+///     {
+///         callback(self).await
+///     }
+/// }
+///
+/// pub async fn test_transaction<'a, 'b>(
+///     db: &mut Db,
+///     ok: &'a str,
+///     err: &'b str,
+///     is_ok: bool,
+/// ) -> Result<&'a str, &'b str> {
+///     db.transaction(|db| async move {
+///         db.count += 1;
+///         if is_ok {
+///             Ok(ok)
+///         } else {
+///             Err(err)
+///         }
+///     }.scope_boxed()).await?;
+///
+///     // note that `async` is used instead of `async move`
+///     // since the callback parameter is unused
+///     db.transaction(|_| async {
+///         if is_ok {
+///             Ok(ok)
+///         } else {
+///             Err(err)
+///         }
+///     }.scope_boxed()).await
+/// }
+/// ```
 #[derive(Clone, Debug)]
-pub struct ScopedFuture<'big, 'small, Fut> {
+pub struct ScopedFuture<'upper_bound, 'a, Fut> {
     future: Fut,
-    scope: ImpliedLifetimeBound<'big, 'small>,
+    scope: ImpliedLifetimeBound<'upper_bound, 'a>,
 }
 
-pub type ImpliedLifetimeBound<'big, 'small> = PhantomData<&'small &'big ()>;
+/// A wrapper type which imposes a lifetime bound on small such that it lasts at most the lifetime of big.
+pub type ImpliedLifetimeBound<'upper_bound, 'a> = PhantomData<&'a &'upper_bound ()>;
 
+/// A boxed future whose lifetime is lower bounded.
 #[cfg(feature = "std")]
-pub type ScopedBoxFuture<'big, 'small, T> = ScopedFuture<'big, 'small, BoxFuture<'small, T>>;
+pub type ScopedBoxFuture<'upper_bound, 'a, T> = ScopedFuture<'upper_bound, 'a, BoxFuture<'a, T>>;
 
+/// A non-Send boxed future whose lifetime is lower bounded.
 #[cfg(feature = "std")]
-pub type ScopedLocalBoxFuture<'big, 'small, T> = ScopedFuture<'big, 'small, LocalBoxFuture<'small, T>>;
+pub type ScopedLocalBoxFuture<'upper_bound, 'a, T> =
+    ScopedFuture<'upper_bound, 'a, LocalBoxFuture<'a, T>>;
 
+/// An extension trait for `Future`s that provides methods for encoding lifetime information of captures.
 pub trait ScopedFutureExt: Sized {
-    fn scoped<'big, 'small>(self) -> ScopedFuture<'big, 'small, Self>;
+    /// Encodes the lifetimes of this `Future`'s captures.
+    fn scoped<'upper_bound, 'a>(self) -> ScopedFuture<'upper_bound, 'a, Self>;
 
+    /// Boxes this `Future` and encodes the lifetimes of its captures.
     #[cfg(feature = "std")]
-    fn scope_boxed<'big, 'small>(self) -> ScopedBoxFuture<'big, 'small, <Self as Future>::Output> where Self: Send + Future + 'small;
+    fn scope_boxed<'upper_bound, 'a>(
+        self,
+    ) -> ScopedBoxFuture<'upper_bound, 'a, <Self as Future>::Output>
+    where
+        Self: Send + Future + 'a;
 
+    /// Boxes this non-Send `Future` and encodes the lifetimes of its captures.
     #[cfg(feature = "std")]
-    fn scope_boxed_local<'big, 'small>(self) -> ScopedLocalBoxFuture<'big, 'small, <Self as Future>::Output> where Self: Future + 'small;
+    fn scope_boxed_local<'upper_bound, 'a>(
+        self,
+    ) -> ScopedLocalBoxFuture<'upper_bound, 'a, <Self as Future>::Output>
+    where
+        Self: Future + 'a;
 }
 
-impl<'big, 'small, Fut> ScopedFuture<'big, 'small, Fut> {
+impl<'upper_bound, 'a, Fut> ScopedFuture<'upper_bound, 'a, Fut> {
     pin_utils::unsafe_pinned!(future: Fut);
 }
 
-impl<'big, 'small, Fut: Future> Future for ScopedFuture<'big, 'small, Fut> {
+impl<'upper_bound, 'a, Fut: Future> Future for ScopedFuture<'upper_bound, 'a, Fut> {
     type Output = Fut::Output;
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         self.future().poll(cx)
@@ -42,7 +107,7 @@ impl<'big, 'small, Fut: Future> Future for ScopedFuture<'big, 'small, Fut> {
 }
 
 impl<Fut: Future> ScopedFutureExt for Fut {
-    fn scoped<'big, 'small>(self) -> ScopedFuture<'big, 'small, Self> {
+    fn scoped<'upper_bound, 'a>(self) -> ScopedFuture<'upper_bound, 'a, Self> {
         ScopedFuture {
             future: self,
             scope: PhantomData,
@@ -50,7 +115,12 @@ impl<Fut: Future> ScopedFutureExt for Fut {
     }
 
     #[cfg(feature = "std")]
-    fn scope_boxed<'big, 'small>(self) -> ScopedFuture<'big, 'small, BoxFuture<'small, <Self as Future>::Output>> where Self: Send + Future + 'small {
+    fn scope_boxed<'upper_bound, 'a>(
+        self,
+    ) -> ScopedFuture<'upper_bound, 'a, BoxFuture<'a, <Self as Future>::Output>>
+    where
+        Self: Send + Future + 'a,
+    {
         ScopedFuture {
             future: self.boxed(),
             scope: PhantomData,
@@ -58,7 +128,12 @@ impl<Fut: Future> ScopedFutureExt for Fut {
     }
 
     #[cfg(feature = "std")]
-    fn scope_boxed_local<'big, 'small>(self) -> ScopedFuture<'big, 'small, LocalBoxFuture<'small, <Self as Future>::Output>> where Self: Future + 'small {
+    fn scope_boxed_local<'upper_bound, 'a>(
+        self,
+    ) -> ScopedFuture<'upper_bound, 'a, LocalBoxFuture<'a, <Self as Future>::Output>>
+    where
+        Self: Future + 'a,
+    {
         ScopedFuture {
             future: self.boxed_local(),
             scope: PhantomData,
