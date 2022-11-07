@@ -10,6 +10,7 @@ A utility crate for imposing upper bounds on Future lifetimes.
 """
 categories = ["asynchronous"]
 keywords = ["scope", "future", "futures", "hrtb", "liftime"]
+include = ["**/*.rs", "Cargo.toml", "LICENSE-*"]
 
 [dependencies]
 futures = { version = "0.3.24", features = ["alloc"], optional = true }
