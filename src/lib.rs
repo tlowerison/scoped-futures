@@ -8,8 +8,8 @@ use core::task::{Context, Poll};
 #[cfg(feature = "std")]
 use futures::future::{BoxFuture, FutureExt, LocalBoxFuture};
 
-/// A [`Future`] wrapper that imposes a lower limit on the future's lifetime's duration.
-/// This is especially useful in combination with higher-tranked bounds when an lifetime
+/// A [`Future`] wrapper that imposes an upper limit on the future's lifetime's duration.
+/// This is especially useful in combination with higher-tranked bounds when a lifetime
 /// bound is needed for the higher-ranked lifetime and a future is used in the bound.
 ///
 /// # Example
@@ -23,7 +23,9 @@ use futures::future::{BoxFuture, FutureExt, LocalBoxFuture};
 /// impl Db {
 ///     async fn transaction<'a, T: 'a, E: 'a, F: 'a>(&mut self, callback: F) -> Result<T, E>
 ///     where
-///         F: for<'b> FnOnce(&'b mut Self) -> ScopedBoxFuture<'a, 'b, Result<T, E>> + Send,
+///         // ScopedBoxFuture imposes a lifetime bound on 'b which prevents the hrtb below needing to be satisfied
+///         // for all lifetimes (including 'static) and instead only lifetimes which live at most as long as 'a
+///         F: for<'b /* where 'a: 'b */> FnOnce(&'b mut Self) -> ScopedBoxFuture<'a, 'b, Result<T, E>> + Send,
 ///     {
 ///         callback(self).await
 ///     }
@@ -61,14 +63,14 @@ pub struct ScopedFuture<'upper_bound, 'a, Fut> {
     scope: ImpliedLifetimeBound<'upper_bound, 'a>,
 }
 
-/// A wrapper type which imposes a lifetime bound on small such that it lasts at most the lifetime of big.
+/// A wrapper type which imposes an upper bound on the provided lifetime.
 pub type ImpliedLifetimeBound<'upper_bound, 'a> = PhantomData<&'a &'upper_bound ()>;
 
-/// A boxed future whose lifetime is lower bounded.
+/// A boxed future whose lifetime is upper bounded.
 #[cfg(feature = "std")]
 pub type ScopedBoxFuture<'upper_bound, 'a, T> = ScopedFuture<'upper_bound, 'a, BoxFuture<'a, T>>;
 
-/// A non-Send boxed future whose lifetime is lower bounded.
+/// A non-Send boxed future whose lifetime is upper bounded.
 #[cfg(feature = "std")]
 pub type ScopedLocalBoxFuture<'upper_bound, 'a, T> =
     ScopedFuture<'upper_bound, 'a, LocalBoxFuture<'a, T>>;
