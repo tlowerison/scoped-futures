@@ -9,12 +9,12 @@ use core::task::{Context, Poll};
 use futures::future::{BoxFuture, FutureExt, LocalBoxFuture};
 
 /// A [`Future`] wrapper that imposes an upper limit on the future's lifetime's duration.
-/// This is especially useful in combination with higher-tranked bounds when a lifetime
-/// bound is needed for the higher-ranked lifetime and a future is used in the bound.
+/// This is especially useful in combination with higher-ranked lifetimes which need an
+/// upper bound (i.e. not all the way up to `'static`).
 ///
 /// # Example
 /// ```
-/// use futures::future::{ScopedBoxFuture, ScopedFutureExt};
+/// use scoped_futures::{ScopedBoxFuture, ScopedFutureExt};
 ///
 /// pub struct Db {
 ///     count: u8,
@@ -23,8 +23,9 @@ use futures::future::{BoxFuture, FutureExt, LocalBoxFuture};
 /// impl Db {
 ///     async fn transaction<'a, T: 'a, E: 'a, F: 'a>(&mut self, callback: F) -> Result<T, E>
 ///     where
-///         // ScopedBoxFuture imposes a lifetime bound on 'b which prevents the hrtb below needing to be satisfied
-///         // for all lifetimes (including 'static) and instead only lifetimes which live at most as long as 'a
+///         // ScopedBoxFuture imposes a lifetime bound on 'b which prevents the hrtb below needing
+///         // to be satisfied for all lifetimes (including 'static) and instead only lifetimes
+///         // which live at most as long as 'a
 ///         F: for<'b /* where 'a: 'b */> FnOnce(&'b mut Self) -> ScopedBoxFuture<'a, 'b, Result<T, E>> + Send,
 ///     {
 ///         callback(self).await
@@ -37,24 +38,38 @@ use futures::future::{BoxFuture, FutureExt, LocalBoxFuture};
 ///     err: &'b str,
 ///     is_ok: bool,
 /// ) -> Result<&'a str, &'b str> {
+///     // note the lack of `move` or any cloning in front of the closure
 ///     db.transaction(|db| async move {
 ///         db.count += 1;
 ///         if is_ok {
+///             println!("{ok}");
 ///             Ok(ok)
 ///         } else {
+///             println!("{err}");
 ///             Err(err)
 ///         }
 ///     }.scope_boxed()).await?;
 ///
-///     // note that `async` is used instead of `async move`
-///     // since the callback parameter is unused
+///     // note that `async` can be used instead of `async move` since the callback param is unused
 ///     db.transaction(|_| async {
 ///         if is_ok {
+///             println!("{ok}");
 ///             Ok(ok)
 ///         } else {
+///             println!("{err}");
 ///             Err(err)
 ///         }
 ///     }.scope_boxed()).await
+/// }
+///
+/// #[test]
+/// async fn test_transaction_works() {
+///     let mut db = Db { count: 0 };
+///     let ok = String::from("ok");
+///     let err = String::from("err");
+///     let result = test_transaction(&mut db, &ok, &err, true).await;
+///     assert_eq!(Ok(&*ok), result);
+///     assert_eq!(1, db.count);
 /// }
 /// ```
 #[derive(Clone, Debug)]
@@ -63,7 +78,7 @@ pub struct ScopedFuture<'upper_bound, 'a, Fut> {
     scope: ImpliedLifetimeBound<'upper_bound, 'a>,
 }
 
-/// A wrapper type which imposes an upper bound on the provided lifetime.
+/// A wrapper type which imposes an upper bound on a lifetime.
 pub type ImpliedLifetimeBound<'upper_bound, 'a> = PhantomData<&'a &'upper_bound ()>;
 
 /// A boxed future whose lifetime is upper bounded.
@@ -75,7 +90,7 @@ pub type ScopedBoxFuture<'upper_bound, 'a, T> = ScopedFuture<'upper_bound, 'a, B
 pub type ScopedLocalBoxFuture<'upper_bound, 'a, T> =
     ScopedFuture<'upper_bound, 'a, LocalBoxFuture<'a, T>>;
 
-/// An extension trait for `Future`s that provides methods for encoding lifetime information of captures.
+/// An extension trait for `Future` that provides methods for encoding lifetime upper bound information.
 pub trait ScopedFutureExt: Sized {
     /// Encodes the lifetimes of this `Future`'s captures.
     fn scoped<'upper_bound, 'a>(self) -> ScopedFuture<'upper_bound, 'a, Self>;
