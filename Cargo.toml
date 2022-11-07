@@ -2,7 +2,14 @@
 name = "scoped-futures"
 version = "0.1.0"
 edition = "2021"
-authors = ["Trey Lowerison <trey@sidechainme.com>"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/sidechainme/scoped-futures"
+homepage = "https://github.com/sidechainme/scoped-futures"
+description = """
+A utility crate for imposing upper bounds on Future lifetimes.
+"""
+categories = ["asynchronous"]
+keywords = ["scope", "future", "futures", "hrtb", "liftime"]
 
 [dependencies]
 futures = { version = "0.3.24", features = ["alloc"], optional = true }

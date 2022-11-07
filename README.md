@@ -1,3 +1,3 @@
 # scoped-futures
 
-A utility crate for imposing upper bounds on future lifetimes.
+A utility crate for imposing upper bounds on Future lifetimes.
