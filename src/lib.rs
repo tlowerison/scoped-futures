@@ -1,7 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use core::future::Future;
-use core::marker::PhantomData;
+use core::{future::Future, marker::PhantomData, pin::Pin};
 
 #[cfg(feature = "std")]
 use futures::future::{BoxFuture, FutureExt, LocalBoxFuture};
@@ -111,7 +110,7 @@ impl<'upper_bound, 'a, Fut> ScopedFuture<'upper_bound, 'a, Fut> {
 
 impl<'upper_bound, 'a, Fut: Future> Future for ScopedFuture<'upper_bound, 'a, Fut> {
     type Output = Fut::Output;
-    fn poll(self: core::pin::Pin<&mut Self>, cx: &mut core::task::Context<'_>) -> core::task::Poll<Self::Output> {
+    fn poll(self: Pin<&mut Self>, cx: &mut core::task::Context<'_>) -> core::task::Poll<Self::Output> {
         self.future().poll(cx)
     }
 }
@@ -139,15 +138,29 @@ impl<Fut: Future> ScopedFutureExt for Fut {
 }
 
 #[cfg(feature = "std")]
-impl<'upper_bound, 'a, T> From<BoxFuture<'a, T>> for ScopedBoxFuture<'upper_bound, 'a, T> {
-    fn from(future: BoxFuture<'a, T>) -> Self {
+impl<'upper_bound, 'a, T, Fut: Future<Output = T> + Send + 'a> From<Pin<Box<Fut>>> for ScopedBoxFuture<'upper_bound, 'a, T> {
+    fn from(future: Pin<Box<Fut>>) -> Self {
         Self { future, scope: PhantomData }
     }
 }
 
 #[cfg(feature = "std")]
-impl<'upper_bound, 'a, T> From<LocalBoxFuture<'a, T>> for ScopedLocalBoxFuture<'upper_bound, 'a, T> {
-    fn from(future: LocalBoxFuture<'a, T>) -> Self {
+impl<'upper_bound, 'a, T, Fut: Future<Output = T> + 'a> From<Pin<Box<Fut>>> for ScopedLocalBoxFuture<'upper_bound, 'a, T> {
+    fn from(future: Pin<Box<Fut>>) -> Self {
         Self { future, scope: PhantomData }
+    }
+}
+
+#[cfg(feature = "std")]
+impl<'upper_bound, 'a, T, Fut: Future<Output = T> + Send + 'a> From<Box<Fut>> for ScopedBoxFuture<'upper_bound, 'a, T> {
+    fn from(future: Box<Fut>) -> Self {
+        Self { future: Box::into_pin(future), scope: PhantomData }
+    }
+}
+
+#[cfg(feature = "std")]
+impl<'upper_bound, 'a, T, Fut: Future<Output = T> + 'a> From<Box<Fut>> for ScopedLocalBoxFuture<'upper_bound, 'a, T> {
+    fn from(future: Box<Fut>) -> Self {
+        Self { future: Box::into_pin(future), scope: PhantomData }
     }
 }
