@@ -8,9 +8,9 @@ use core::task::{Context, Poll};
 #[cfg(feature = "std")]
 use futures::future::{BoxFuture, FutureExt, LocalBoxFuture};
 
-/// A [`Future`] wrapper that imposes an upper limit on the future's lifetime's duration.
-/// This is especially useful in combination with higher-ranked lifetimes which need an
-/// upper bound (i.e. not all the way up to `'static`).
+/// A [`Future`] wrapper type that imposes an upper bound on its lifetime's duration.
+/// This is especially useful for callbacks that use higher-ranked lifetimes in their return type,
+/// where it can prevent `'static` bounds from being placed on a returned `Future`.
 ///
 /// # Example
 /// ```
@@ -21,12 +21,14 @@ use futures::future::{BoxFuture, FutureExt, LocalBoxFuture};
 /// }
 ///
 /// impl Db {
-///     async fn transaction<'a, T: 'a, E: 'a, F: 'a>(&mut self, callback: F) -> Result<T, E>
+///     async fn transaction<'a, F, T, E>(&mut self, callback: F) -> Result<T, E>
 ///     where
 ///         // ScopedBoxFuture imposes a lifetime bound on 'b which prevents the hrtb below needing
 ///         // to be satisfied for all lifetimes (including 'static) and instead only lifetimes
 ///         // which live at most as long as 'a
-///         F: for<'b /* where 'a: 'b */> FnOnce(&'b mut Self) -> ScopedBoxFuture<'a, 'b, Result<T, E>> + Send,
+///         F: for<'b /* where 'a: 'b */> FnOnce(&'b mut Self) -> ScopedBoxFuture<'a, 'b, Result<T, E>> + Send + 'a,
+///         T: 'a,
+///         E: 'a,
 ///     {
 ///         callback(self).await
 ///     }
@@ -42,10 +44,8 @@ use futures::future::{BoxFuture, FutureExt, LocalBoxFuture};
 ///     db.transaction(|db| async move {
 ///         db.count += 1;
 ///         if is_ok {
-///             println!("{ok}");
 ///             Ok(ok)
 ///         } else {
-///             println!("{err}");
 ///             Err(err)
 ///         }
 ///     }.scope_boxed()).await?;
@@ -53,23 +53,23 @@ use futures::future::{BoxFuture, FutureExt, LocalBoxFuture};
 ///     // note that `async` can be used instead of `async move` since the callback param is unused
 ///     db.transaction(|_| async {
 ///         if is_ok {
-///             println!("{ok}");
 ///             Ok(ok)
 ///         } else {
-///             println!("{err}");
 ///             Err(err)
 ///         }
 ///     }.scope_boxed()).await
 /// }
 ///
 /// #[test]
-/// async fn test_transaction_works() {
-///     let mut db = Db { count: 0 };
-///     let ok = String::from("ok");
-///     let err = String::from("err");
-///     let result = test_transaction(&mut db, &ok, &err, true).await;
-///     assert_eq!(Ok(&*ok), result);
-///     assert_eq!(1, db.count);
+/// fn test_transaction_works() {
+///     futures::executor::block_on(async {
+///         let mut db = Db { count: 0 };
+///         let ok = String::from("ok");
+///         let err = String::from("err");
+///         let result = test_transaction(&mut db, &ok, &err, true).await;
+///         assert_eq!(ok, result.unwrap());
+///         assert_eq!(1, db.count);
+///     })
 /// }
 /// ```
 #[derive(Clone, Debug)]
