@@ -137,3 +137,17 @@ impl<Fut: Future> ScopedFutureExt for Fut {
         ScopedFuture { future: self.boxed_local(), scope: PhantomData }
     }
 }
+
+#[cfg(feature = "std")]
+impl<'upper_bound, 'a, T> From<BoxFuture<'a, T>> for ScopedBoxFuture<'upper_bound, 'a, T> {
+    fn from(future: BoxFuture<'a, T>) -> Self {
+        Self { future, scope: PhantomData }
+    }
+}
+
+#[cfg(feature = "std")]
+impl<'upper_bound, 'a, T> From<LocalBoxFuture<'a, T>> for ScopedLocalBoxFuture<'upper_bound, 'a, T> {
+    fn from(future: LocalBoxFuture<'a, T>) -> Self {
+        Self { future, scope: PhantomData }
+    }
+}
