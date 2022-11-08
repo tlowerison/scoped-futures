@@ -34,7 +34,7 @@ repos:
         name: cargo-clippy
         description: lint the minimal changed packages in the cargo workspace
         stages: [push]
-        entry: cargo clippy --all-features
+        entry: cargo clippy --all-features --fix
         language: system
         types: [rust]
         pass_filenames: false
