@@ -5,7 +5,15 @@ use core::{future::Future, marker::PhantomData, pin::Pin};
 #[cfg(feature = "std")]
 use futures::future::{BoxFuture, FutureExt, LocalBoxFuture};
 
-pub trait ScopedFuture<'upper_bound, 'a, Bound = ImpliedLifetimeBound<'upper_bound, 'a>>: Future {}
+pub trait ScopedFuture<'upper_bound, 'a, Bound: sealed::SealedBound = ImpliedLifetimeBound<'upper_bound, 'a>>: Future {}
+
+/// A wrapper type which imposes an upper bound on a lifetime.
+pub type ImpliedLifetimeBound<'upper_bound, 'a> = PhantomData<&'a &'upper_bound ()>;
+
+mod sealed {
+    pub trait SealedBound {}
+    impl<'upper_bound, 'a> SealedBound for super::ImpliedLifetimeBound<'upper_bound, 'a> {}
+}
 
 /// A [`Future`] wrapper type that imposes an upper bound on its lifetime's duration.
 /// This is especially useful for callbacks that use higher-ranked lifetimes in their return type,
@@ -77,9 +85,6 @@ pub struct ScopedFutureWrapper<'upper_bound, 'a, Fut> {
     scope: ImpliedLifetimeBound<'upper_bound, 'a>,
 }
 
-/// A wrapper type which imposes an upper bound on a lifetime.
-pub type ImpliedLifetimeBound<'upper_bound, 'a> = PhantomData<&'a &'upper_bound ()>;
-
 /// A boxed future whose lifetime is upper bounded.
 #[cfg(feature = "std")]
 pub type ScopedBoxFuture<'upper_bound, 'a, T> = ScopedFutureWrapper<'upper_bound, 'a, BoxFuture<'a, T>>;
@@ -143,9 +148,9 @@ impl<Fut: Future> ScopedFutureExt for Fut {
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "std")] {
-        impl<'a, T> ScopedFuture<'static, 'a> for BoxFuture<'a, T> {}
-        impl<'a, T> ScopedFuture<'static, 'a> for LocalBoxFuture<'a, T> {}
-        impl<'a, T, Fut: Future<Output = T> + 'a> ScopedFuture<'static, 'a> for Pin<Box<Fut>> {}
+        impl<'upper_bound, 'a, T> ScopedFuture<'upper_bound, 'a> for BoxFuture<'a, T> {}
+        impl<'upper_bound, 'a, T> ScopedFuture<'upper_bound, 'a> for LocalBoxFuture<'a, T> {}
+        impl<'upper_bound, 'a, T, Fut: Future<Output = T> + 'a> ScopedFuture<'upper_bound, 'a> for Pin<Box<Fut>> {}
 
         impl<'upper_bound, 'a, T, Fut: Future<Output = T> + Send + 'a> From<Pin<Box<Fut>>> for ScopedBoxFuture<'upper_bound, 'a, T> {
             fn from(future: Pin<Box<Fut>>) -> Self {
