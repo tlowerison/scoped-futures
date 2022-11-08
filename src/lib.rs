@@ -5,6 +5,8 @@ use core::{future::Future, marker::PhantomData, pin::Pin};
 #[cfg(feature = "std")]
 use futures::future::{BoxFuture, FutureExt, LocalBoxFuture};
 
+pub trait ScopedFuture<'upper_bound, 'a, Bound = ImpliedLifetimeBound<'upper_bound, 'a>>: Future {}
+
 /// A [`Future`] wrapper type that imposes an upper bound on its lifetime's duration.
 /// This is especially useful for callbacks that use higher-ranked lifetimes in their return type,
 /// where it can prevent `'static` bounds from being placed on a returned `Future`.
@@ -70,7 +72,7 @@ use futures::future::{BoxFuture, FutureExt, LocalBoxFuture};
 /// }
 /// ```
 #[derive(Clone, Debug)]
-pub struct ScopedFuture<'upper_bound, 'a, Fut> {
+pub struct ScopedFutureWrapper<'upper_bound, 'a, Fut> {
     future: Fut,
     scope: ImpliedLifetimeBound<'upper_bound, 'a>,
 }
@@ -80,16 +82,16 @@ pub type ImpliedLifetimeBound<'upper_bound, 'a> = PhantomData<&'a &'upper_bound 
 
 /// A boxed future whose lifetime is upper bounded.
 #[cfg(feature = "std")]
-pub type ScopedBoxFuture<'upper_bound, 'a, T> = ScopedFuture<'upper_bound, 'a, BoxFuture<'a, T>>;
+pub type ScopedBoxFuture<'upper_bound, 'a, T> = ScopedFutureWrapper<'upper_bound, 'a, BoxFuture<'a, T>>;
 
 /// A non-Send boxed future whose lifetime is upper bounded.
 #[cfg(feature = "std")]
-pub type ScopedLocalBoxFuture<'upper_bound, 'a, T> = ScopedFuture<'upper_bound, 'a, LocalBoxFuture<'a, T>>;
+pub type ScopedLocalBoxFuture<'upper_bound, 'a, T> = ScopedFutureWrapper<'upper_bound, 'a, LocalBoxFuture<'a, T>>;
 
 /// An extension trait for `Future` that provides methods for encoding lifetime upper bound information.
 pub trait ScopedFutureExt: Sized {
     /// Encodes the lifetimes of this `Future`'s captures.
-    fn scoped<'upper_bound, 'a>(self) -> ScopedFuture<'upper_bound, 'a, Self>;
+    fn scoped<'upper_bound, 'a>(self) -> ScopedFutureWrapper<'upper_bound, 'a, Self>;
 
     /// Boxes this `Future` and encodes the lifetimes of its captures.
     #[cfg(feature = "std")]
@@ -104,91 +106,94 @@ pub trait ScopedFutureExt: Sized {
         Self: Future + 'a;
 }
 
-impl<'upper_bound, 'a, Fut> ScopedFuture<'upper_bound, 'a, Fut> {
+impl<'upper_bound, 'a, Fut> ScopedFutureWrapper<'upper_bound, 'a, Fut> {
     pin_utils::unsafe_pinned!(future: Fut);
 }
 
-impl<'upper_bound, 'a, Fut: Future> Future for ScopedFuture<'upper_bound, 'a, Fut> {
+impl<'upper_bound, 'a, Fut: Future> Future for ScopedFutureWrapper<'upper_bound, 'a, Fut> {
     type Output = Fut::Output;
     fn poll(self: Pin<&mut Self>, cx: &mut core::task::Context<'_>) -> core::task::Poll<Self::Output> {
         self.future().poll(cx)
     }
 }
 
+impl<Fut: Future> ScopedFuture<'_, '_> for ScopedFutureWrapper<'_, '_, Fut> {}
+
 impl<Fut: Future> ScopedFutureExt for Fut {
-    fn scoped<'upper_bound, 'a>(self) -> ScopedFuture<'upper_bound, 'a, Self> {
-        ScopedFuture { future: self, scope: PhantomData }
+    fn scoped<'upper_bound, 'a>(self) -> ScopedFutureWrapper<'upper_bound, 'a, Self> {
+        ScopedFutureWrapper { future: self, scope: PhantomData }
     }
 
     #[cfg(feature = "std")]
-    fn scope_boxed<'upper_bound, 'a>(self) -> ScopedFuture<'upper_bound, 'a, BoxFuture<'a, <Self as Future>::Output>>
+    fn scope_boxed<'upper_bound, 'a>(self) -> ScopedFutureWrapper<'upper_bound, 'a, BoxFuture<'a, <Self as Future>::Output>>
     where
         Self: Send + Future + 'a,
     {
-        ScopedFuture { future: self.boxed(), scope: PhantomData }
+        ScopedFutureWrapper { future: self.boxed(), scope: PhantomData }
     }
 
     #[cfg(feature = "std")]
-    fn scope_boxed_local<'upper_bound, 'a>(self) -> ScopedFuture<'upper_bound, 'a, LocalBoxFuture<'a, <Self as Future>::Output>>
+    fn scope_boxed_local<'upper_bound, 'a>(self) -> ScopedFutureWrapper<'upper_bound, 'a, LocalBoxFuture<'a, <Self as Future>::Output>>
     where
         Self: Future + 'a,
     {
-        ScopedFuture { future: self.boxed_local(), scope: PhantomData }
+        ScopedFutureWrapper { future: self.boxed_local(), scope: PhantomData }
     }
 }
 
-#[cfg(feature = "std")]
-impl<'upper_bound, 'a, T, Fut: Future<Output = T> + Send + 'a> From<Pin<Box<Fut>>> for ScopedBoxFuture<'upper_bound, 'a, T> {
-    fn from(future: Pin<Box<Fut>>) -> Self {
-        Self { future, scope: PhantomData }
-    }
-}
+cfg_if::cfg_if! {
+    if #[cfg(feature = "std")] {
+        impl<'a, T> ScopedFuture<'static, 'a> for BoxFuture<'a, T> {}
+        impl<'a, T> ScopedFuture<'static, 'a> for LocalBoxFuture<'a, T> {}
+        impl<'a, T, Fut: Future<Output = T> + 'a> ScopedFuture<'static, 'a> for Pin<Box<Fut>> {}
 
-#[cfg(feature = "std")]
-impl<'upper_bound, 'a, T, Fut: Future<Output = T> + 'a> From<Pin<Box<Fut>>> for ScopedLocalBoxFuture<'upper_bound, 'a, T> {
-    fn from(future: Pin<Box<Fut>>) -> Self {
-        Self { future, scope: PhantomData }
-    }
-}
+        impl<'upper_bound, 'a, T, Fut: Future<Output = T> + Send + 'a> From<Pin<Box<Fut>>> for ScopedBoxFuture<'upper_bound, 'a, T> {
+            fn from(future: Pin<Box<Fut>>) -> Self {
+                Self { future, scope: PhantomData }
+            }
+        }
 
-#[cfg(feature = "std")]
-impl<'upper_bound, 'a, T, Fut: Future<Output = T> + Send + 'a> From<Box<Fut>> for ScopedBoxFuture<'upper_bound, 'a, T> {
-    fn from(future: Box<Fut>) -> Self {
-        Self { future: Box::into_pin(future), scope: PhantomData }
-    }
-}
+        impl<'upper_bound, 'a, T, Fut: Future<Output = T> + 'a> From<Pin<Box<Fut>>> for ScopedLocalBoxFuture<'upper_bound, 'a, T> {
+            fn from(future: Pin<Box<Fut>>) -> Self {
+                Self { future, scope: PhantomData }
+            }
+        }
 
-#[cfg(feature = "std")]
-impl<'upper_bound, 'a, T, Fut: Future<Output = T> + 'a> From<Box<Fut>> for ScopedLocalBoxFuture<'upper_bound, 'a, T> {
-    fn from(future: Box<Fut>) -> Self {
-        Self { future: Box::into_pin(future), scope: PhantomData }
-    }
-}
+        impl<'upper_bound, 'a, T, Fut: Future<Output = T> + Send + 'a> From<Box<Fut>> for ScopedBoxFuture<'upper_bound, 'a, T> {
+            fn from(future: Box<Fut>) -> Self {
+                Self { future: Box::into_pin(future), scope: PhantomData }
+            }
+        }
 
-#[cfg(feature = "std")]
-impl<'upper_bound, 'a, T> From<BoxFuture<'a, T>> for ScopedBoxFuture<'upper_bound, 'a, T> {
-    fn from(future: BoxFuture<'a, T>) -> Self {
-        Self { future, scope: PhantomData }
-    }
-}
+        impl<'upper_bound, 'a, T, Fut: Future<Output = T> + 'a> From<Box<Fut>> for ScopedLocalBoxFuture<'upper_bound, 'a, T> {
+            fn from(future: Box<Fut>) -> Self {
+                Self { future: Box::into_pin(future), scope: PhantomData }
+            }
+        }
 
-#[cfg(feature = "std")]
-impl<'upper_bound, 'a, T> From<LocalBoxFuture<'a, T>> for ScopedLocalBoxFuture<'upper_bound, 'a, T> {
-    fn from(future: LocalBoxFuture<'a, T>) -> Self {
-        Self { future, scope: PhantomData }
-    }
-}
+        impl<'upper_bound, 'a, T> From<BoxFuture<'a, T>> for ScopedBoxFuture<'upper_bound, 'a, T> {
+            fn from(future: BoxFuture<'a, T>) -> Self {
+                Self { future, scope: PhantomData }
+            }
+        }
 
-#[cfg(feature = "std")]
-impl<'upper_bound, 'a, T> From<Box<dyn Future<Output = T> + Send + 'a>> for ScopedBoxFuture<'upper_bound, 'a, T> {
-    fn from(future: Box<dyn Future<Output = T> + Send + 'a>) -> Self {
-        Self { future: Box::into_pin(future), scope: PhantomData }
-    }
-}
+        impl<'upper_bound, 'a, T> From<LocalBoxFuture<'a, T>> for ScopedLocalBoxFuture<'upper_bound, 'a, T> {
+            fn from(future: LocalBoxFuture<'a, T>) -> Self {
+                Self { future, scope: PhantomData }
+            }
+        }
 
-#[cfg(feature = "std")]
-impl<'upper_bound, 'a, T> From<Box<dyn Future<Output = T> + 'a>> for ScopedLocalBoxFuture<'upper_bound, 'a, T> {
-    fn from(future: Box<dyn Future<Output = T> + 'a>) -> Self {
-        Self { future: Box::into_pin(future), scope: PhantomData }
+        impl<'upper_bound, 'a, T> From<Box<dyn Future<Output = T> + Send + 'a>> for ScopedBoxFuture<'upper_bound, 'a, T> {
+            fn from(future: Box<dyn Future<Output = T> + Send + 'a>) -> Self {
+                Self { future: Box::into_pin(future), scope: PhantomData }
+            }
+        }
+
+        impl<'upper_bound, 'a, T> From<Box<dyn Future<Output = T> + 'a>> for ScopedLocalBoxFuture<'upper_bound, 'a, T> {
+            fn from(future: Box<dyn Future<Output = T> + 'a>) -> Self {
+                Self { future: Box::into_pin(future), scope: PhantomData }
+            }
+        }
+
     }
 }

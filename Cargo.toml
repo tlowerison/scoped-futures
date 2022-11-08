@@ -13,6 +13,7 @@ keywords = ["scope", "future", "futures", "hrtb", "liftime"]
 include = ["**/*.rs", "Cargo.toml", "LICENSE-*"]
 
 [dependencies]
+cfg-if = "1.0.0"
 futures = { version = "0.3.24", features = ["alloc"], optional = true }
 pin-utils = "0.1.0"
 
