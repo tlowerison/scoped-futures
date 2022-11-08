@@ -2,9 +2,9 @@
 
 use core::{future::Future, marker::PhantomData, pin::Pin};
 
-/// A [`Future`] super-trait with an implied upper bound on the lifetime of its provided lifetime.
+/// A [`Future`] super-trait with an implied upper bound on the provided lifetime.
 /// This is especially useful for callbacks that use higher-ranked lifetimes in their return type,
-/// where it can prevent `'static` bounds from being placed on a returned `Future`.
+/// where it can prevent `'static` bounds from being placed on a returned [`Future`].
 ///
 /// # Example
 /// ```
@@ -67,7 +67,11 @@ use core::{future::Future, marker::PhantomData, pin::Pin};
 ///     })
 /// }
 /// ```
-pub trait ScopedFuture<'upper_bound, 'a, Bound: sealed::SealedBound = ImpliedLifetimeBound<'upper_bound, 'a>>: Future {}
+pub trait ScopedFuture<'upper_bound, 'a, Bound = ImpliedLifetimeBound<'upper_bound, 'a>>: Future
+where
+    Bound: sealed::Sealed,
+{
+}
 
 /// A wrapper type which imposes an upper bound on a lifetime.
 pub type ImpliedLifetimeBound<'upper_bound, 'a> = PhantomData<&'a &'upper_bound ()>;
@@ -75,15 +79,15 @@ pub type ImpliedLifetimeBound<'upper_bound, 'a> = PhantomData<&'a &'upper_bound 
 impl<'upper_bound: 'a, 'a, Fut: Future + 'a> ScopedFuture<'upper_bound, 'a> for Fut {}
 
 mod sealed {
-    pub trait SealedBound {}
-    impl<'upper_bound, 'a> SealedBound for super::ImpliedLifetimeBound<'upper_bound, 'a> {}
+    pub trait Sealed {}
+    impl<'upper_bound, 'a> Sealed for super::ImpliedLifetimeBound<'upper_bound, 'a> {}
 }
 
 /// A boxed future whose lifetime is upper bounded.
 #[cfg(feature = "std")]
 pub type ScopedBoxFuture<'upper_bound, 'a, T> = Pin<Box<dyn ScopedFuture<'upper_bound, 'a, Output = T> + Send + 'a>>;
 
-/// A non-Send boxed future whose lifetime is upper bounded.
+/// A non-[`Send`] boxed future whose lifetime is upper bounded.
 #[cfg(feature = "std")]
 pub type ScopedLocalBoxFuture<'upper_bound, 'a, T> = Pin<Box<dyn ScopedFuture<'upper_bound, 'a, Output = T> + 'a>>;
 
@@ -94,18 +98,18 @@ pub struct ScopedFutureWrapper<'upper_bound, 'a, Fut> {
     scope: ImpliedLifetimeBound<'upper_bound, 'a>,
 }
 
-/// An extension trait for `Future` that provides methods for encoding lifetime upper bound information.
+/// An extension trait for [`Future`] that provides methods for encoding lifetime upper bound information.
 pub trait ScopedFutureExt: Sized {
-    /// Encodes the lifetimes of this `Future`'s captures.
+    /// Encodes the lifetimes of this [`Future`]'s captures.
     fn scoped<'upper_bound, 'a>(self) -> ScopedFutureWrapper<'upper_bound, 'a, Self>;
 
-    /// Boxes this `Future` and encodes the lifetimes of its captures.
+    /// Boxes this [`Future`] and encodes the lifetimes of its captures.
     #[cfg(feature = "std")]
     fn scope_boxed<'upper_bound, 'a>(self) -> ScopedBoxFuture<'upper_bound, 'a, <Self as Future>::Output>
     where
         Self: Send + Future + 'a;
 
-    /// Boxes this `Future` and encodes the lifetimes of its captures.
+    /// Boxes this [`Future`] and encodes the lifetimes of its captures.
     #[cfg(feature = "std")]
     fn scope_boxed_local<'upper_bound, 'a>(self) -> ScopedLocalBoxFuture<'upper_bound, 'a, <Self as Future>::Output>
     where
