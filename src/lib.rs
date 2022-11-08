@@ -166,29 +166,29 @@ impl<'a, T, Fut: Future<Output = T> + 'a> From<Box<Fut>> for ScopedLocalBoxFutur
 }
 
 #[cfg(feature = "std")]
-impl<'a, T> From<BoxFuture<'a, T>> for ScopedBoxFuture<'static, 'a, T> {
-    fn from(future: BoxFuture<'a, T>) -> Self {
+impl<T> From<BoxFuture<T>> for ScopedBoxFuture<'static, 'static, T> {
+    fn from(future: BoxFuture<T>) -> Self {
         Self { future, scope: PhantomData }
     }
 }
 
 #[cfg(feature = "std")]
-impl<'a, T> From<LocalBoxFuture<'a, T>> for ScopedLocalBoxFuture<'static, 'a, T> {
-    fn from(future: LocalBoxFuture<'a, T>) -> Self {
+impl<T> From<LocalBoxFuture<T>> for ScopedLocalBoxFuture<'static, 'static, T> {
+    fn from(future: LocalBoxFuture<T>) -> Self {
         Self { future, scope: PhantomData }
     }
 }
 
 #[cfg(feature = "std")]
-impl<'a, T> From<Box<dyn Future<Output = T> + Send + 'a>> for ScopedBoxFuture<'static, 'a, T> {
-    fn from(future: Box<dyn Future<Output = T> + Send + 'a>) -> Self {
+impl<T> From<Box<dyn Future<Output = T> + Send>> for ScopedBoxFuture<'static, 'static, T> {
+    fn from(future: Box<dyn Future<Output = T> + Send>) -> Self {
         Self { future: Box::into_pin(future), scope: PhantomData }
     }
 }
 
 #[cfg(feature = "std")]
-impl<'a, T> From<Box<dyn Future<Output = T> + 'a>> for ScopedLocalBoxFuture<'static, 'a, T> {
-    fn from(future: Box<dyn Future<Output = T> + 'a>) -> Self {
+impl<T> From<Box<dyn Future<Output = T>>> for ScopedLocalBoxFuture<'static, 'static, T> {
+    fn from(future: Box<dyn Future<Output = T>>) -> Self {
         Self { future: Box::into_pin(future), scope: PhantomData }
     }
 }
