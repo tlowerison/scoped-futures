@@ -1,9 +1,6 @@
 # scoped-futures
 
-A utility crate for imposing upper bounds on `Future` lifetimes.
-
-Provides a `Future` super-trait with an implied upper bound on the provided lifetime.
-This is especially useful for callbacks that use higher-ranked lifetimes in their return type,
+A utility crate for imposing upper bounds on `Future` lifetimes. This is especially useful for callbacks that use higher-ranked lifetimes in their return type,
 where it can prevent `'static` bounds from being placed on a returned `Future`.
 
 ## Example
