@@ -7,7 +7,7 @@ This is especially useful for callbacks that use higher-ranked lifetimes in thei
 where it can prevent `'static` bounds from being placed on a returned `Future`.
 
 ## Example
-```
+```rust
 use core::pin::Pin;
 use scoped_futures::{ScopedBoxFuture, ScopedFutureExt};
 
