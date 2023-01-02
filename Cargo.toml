@@ -1,10 +1,10 @@
 [package]
 name = "scoped-futures"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/sidechainme/scoped-futures"
-homepage = "https://github.com/sidechainme/scoped-futures"
+repository = "https://github.com/tlowerison/scoped-futures"
+homepage = "https://github.com/tlowerison/scoped-futures"
 description = """
 A utility crate for imposing upper bounds on Future lifetimes.
 """
@@ -13,11 +13,12 @@ keywords = ["scope", "future", "futures", "hrtb", "liftime"]
 include = ["**/*.rs", "Cargo.toml", "LICENSE-*"]
 
 [dependencies]
-cfg-if = "1.0.0"
-pin-utils = "0.1.0"
+cfg-if = "1.0"
+pin-utils = "0.1"
 
 [dev-dependencies]
-futures = { version = "0.3.25", default-features = false, features = ["executor"] }
+futures = { version = "0.3", default-features = false, features = ["executor"] }
 
 [features]
+default = ["std"]
 std = []
