@@ -8,6 +8,7 @@ use core::{future::Future, marker::PhantomData, pin::Pin};
 ///
 /// # Example
 /// ```
+/// # fn test() {
 /// use core::pin::Pin;
 /// use scoped_futures::{ScopedBoxFuture, ScopedFutureExt};
 ///
@@ -55,17 +56,15 @@ use core::{future::Future, marker::PhantomData, pin::Pin};
 ///     }.scope_boxed()).await
 /// }
 ///
-/// #[test]
-/// fn test_transaction_works() {
-///     futures::executor::block_on(async {
-///         let mut db = Db { count: 0 };
-///         let ok = String::from("ok");
-///         let err = String::from("err");
-///         let result = test_transaction(&mut db, &ok, &err, true).await;
-///         assert_eq!(ok, result.unwrap());
-///         assert_eq!(1, db.count);
-///     })
-/// }
+/// futures::executor::block_on(async {
+///     let mut db = Db { count: 0 };
+///     let ok = String::from("ok");
+///     let err = String::from("err");
+///     let result = test_transaction(&mut db, &ok, &err, true).await;
+///     assert_eq!(ok, result.unwrap());
+///     assert_eq!(1, db.count);
+/// });
+/// # } #[cfg(feature = "std")] test();
 /// ```
 pub trait ScopedFuture<'upper_bound, 'subject, Bound = ImpliedLifetimeBound<'upper_bound, 'subject>>: Future
 where
