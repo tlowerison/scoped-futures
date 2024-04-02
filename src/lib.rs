@@ -95,11 +95,14 @@ pub type ScopedBoxFuture<'upper_bound, 'subject, T> = Pin<Box<dyn ScopedFuture<'
 #[cfg(feature = "alloc")]
 pub type ScopedLocalBoxFuture<'upper_bound, 'subject, T> = Pin<Box<dyn ScopedFuture<'upper_bound, 'subject, Output = T> + 'subject>>;
 
-/// A [`Future`] wrapper type that imposes an upper bound on its lifetime's duration.
-#[derive(Clone, Debug)]
-pub struct ScopedFutureWrapper<'upper_bound, 'subject, Fut> {
-    future: Fut,
-    scope: ImpliedLifetimeBound<'upper_bound, 'subject>,
+pin_project_lite::pin_project! {
+    /// A [`Future`] wrapper type that imposes an upper bound on its lifetime's duration.
+    #[derive(Clone, Debug)]
+    pub struct ScopedFutureWrapper<'upper_bound, 'subject, Fut> {
+        #[pin]
+        future: Fut,
+        scope: ImpliedLifetimeBound<'upper_bound, 'subject>,
+    }
 }
 
 /// An extension trait for [`Future`] that provides methods for encoding lifetime upper bound information.
@@ -120,14 +123,10 @@ pub trait ScopedFutureExt: Sized {
         Self: Future + 'subject;
 }
 
-impl<'upper_bound, 'subject, Fut> ScopedFutureWrapper<'upper_bound, 'subject, Fut> {
-    pin_utils::unsafe_pinned!(future: Fut);
-}
-
 impl<'upper_bound, 'subject, Fut: Future> Future for ScopedFutureWrapper<'upper_bound, 'subject, Fut> {
     type Output = Fut::Output;
     fn poll(self: Pin<&mut Self>, cx: &mut core::task::Context<'_>) -> core::task::Poll<Self::Output> {
-        self.future().poll(cx)
+        self.project().future.poll(cx)
     }
 }
 
