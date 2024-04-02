@@ -1,6 +1,11 @@
-#![cfg_attr(not(feature = "std"), no_std)]
+#![no_std]
+
+#[cfg(feature = "alloc")]
+extern crate alloc;
 
 use core::{future::Future, marker::PhantomData, pin::Pin};
+#[cfg(feature = "alloc")]
+use alloc::boxed::Box;
 
 /// A [`Future`] super-trait with an implied upper bound on the provided lifetime.
 /// This is especially useful for callbacks that use higher-ranked lifetimes in their return type,
@@ -64,7 +69,7 @@ use core::{future::Future, marker::PhantomData, pin::Pin};
 ///     assert_eq!(ok, result.unwrap());
 ///     assert_eq!(1, db.count);
 /// });
-/// # } #[cfg(feature = "std")] test();
+/// # } #[cfg(feature = "alloc")] test();
 /// ```
 pub trait ScopedFuture<'upper_bound, 'subject, Bound = ImpliedLifetimeBound<'upper_bound, 'subject>>: Future
 where
@@ -83,11 +88,11 @@ mod sealed {
 }
 
 /// A boxed future whose lifetime is upper bounded.
-#[cfg(feature = "std")]
+#[cfg(feature = "alloc")]
 pub type ScopedBoxFuture<'upper_bound, 'subject, T> = Pin<Box<dyn ScopedFuture<'upper_bound, 'subject, Output = T> + Send + 'subject>>;
 
 /// A non-[`Send`] boxed future whose lifetime is upper bounded.
-#[cfg(feature = "std")]
+#[cfg(feature = "alloc")]
 pub type ScopedLocalBoxFuture<'upper_bound, 'subject, T> = Pin<Box<dyn ScopedFuture<'upper_bound, 'subject, Output = T> + 'subject>>;
 
 /// A [`Future`] wrapper type that imposes an upper bound on its lifetime's duration.
@@ -103,13 +108,13 @@ pub trait ScopedFutureExt: Sized {
     fn scoped<'upper_bound, 'subject>(self) -> ScopedFutureWrapper<'upper_bound, 'subject, Self>;
 
     /// Boxes this [`Future`] and encodes the lifetimes of its captures.
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn scope_boxed<'upper_bound, 'subject>(self) -> ScopedBoxFuture<'upper_bound, 'subject, <Self as Future>::Output>
     where
         Self: Send + Future + 'subject;
 
     /// Boxes this [`Future`] and encodes the lifetimes of its captures.
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn scope_boxed_local<'upper_bound, 'subject>(self) -> ScopedLocalBoxFuture<'upper_bound, 'subject, <Self as Future>::Output>
     where
         Self: Future + 'subject;
@@ -131,7 +136,7 @@ impl<Fut: Future> ScopedFutureExt for Fut {
         ScopedFutureWrapper { future: self, scope: PhantomData }
     }
 
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn scope_boxed<'upper_bound, 'subject>(self) -> ScopedBoxFuture<'upper_bound, 'subject, <Self as Future>::Output>
     where
         Self: Send + Future + 'subject,
@@ -139,7 +144,7 @@ impl<Fut: Future> ScopedFutureExt for Fut {
         Box::pin(self)
     }
 
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn scope_boxed_local<'upper_bound, 'subject>(self) -> ScopedLocalBoxFuture<'upper_bound, 'subject, <Self as Future>::Output>
     where
         Self: Future + 'subject,
@@ -149,7 +154,7 @@ impl<Fut: Future> ScopedFutureExt for Fut {
 }
 
 cfg_if::cfg_if! {
-    if #[cfg(feature = "std")] {
+    if #[cfg(feature = "alloc")] {
         impl<'upper_bound, 'subject, T, Fut: Future<Output = T> + Send + 'subject> From<Pin<Box<Fut>>> for ScopedBoxFuture<'upper_bound, 'subject, T> {
             fn from(future: Pin<Box<Fut>>) -> Self {
                 future
