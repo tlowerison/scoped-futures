@@ -3,9 +3,9 @@
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
-use core::{future::Future, marker::PhantomData, pin::Pin};
 #[cfg(feature = "alloc")]
 use alloc::boxed::Box;
+use core::{future::Future, marker::PhantomData, pin::Pin};
 
 /// A [`Future`] super-trait with an implied upper bound on the provided lifetime.
 /// This is especially useful for callbacks that use higher-ranked lifetimes in their return type,
