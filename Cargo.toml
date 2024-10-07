@@ -13,7 +13,7 @@ keywords = ["scope", "future", "futures", "hrtb", "liftime"]
 include = ["**/*.rs", "Cargo.toml", "LICENSE-*"]
 
 [dependencies]
-pin-project-lite  = "0.2"
+pin-project-lite = "0.2"
 
 [dev-dependencies]
 futures = { version = "0.3", default-features = false, features = ["executor"] }
