@@ -3,9 +3,9 @@
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
-use core::{future::Future, marker::PhantomData, pin::Pin};
 #[cfg(feature = "alloc")]
 use alloc::boxed::Box;
+use core::{future::Future, marker::PhantomData, pin::Pin};
 
 /// A [`Future`] super-trait with an implied upper bound on the provided lifetime.
 /// This is especially useful for callbacks that use higher-ranked lifetimes in their return type,
@@ -153,66 +153,65 @@ impl<Fut: Future> ScopedFutureExt for Fut {
     }
 }
 
-cfg_if::cfg_if! {
-    if #[cfg(feature = "alloc")] {
-        impl<'upper_bound, 'subject, T, Fut: Future<Output = T> + Send + 'subject> From<Pin<Box<Fut>>> for ScopedBoxFuture<'upper_bound, 'subject, T> {
-            fn from(future: Pin<Box<Fut>>) -> Self {
-                future
-            }
-        }
-
-        impl<'upper_bound, 'subject, T, Fut: Future<Output = T> + 'subject> From<Pin<Box<Fut>>> for ScopedLocalBoxFuture<'upper_bound, 'subject, T> {
-            fn from(future: Pin<Box<Fut>>) -> Self {
-                future
-            }
-        }
-
-        impl<'upper_bound, 'subject, T, Fut: Future<Output = T> + Send + 'subject> From<Box<Fut>> for ScopedBoxFuture<'upper_bound, 'subject, T> {
-            fn from(future: Box<Fut>) -> Self {
-                Box::into_pin(future)
-            }
-        }
-
-        impl<'upper_bound, 'subject, T, Fut: Future<Output = T> + 'subject> From<Box<Fut>> for ScopedLocalBoxFuture<'upper_bound, 'subject, T> {
-            fn from(future: Box<Fut>) -> Self {
-                Box::into_pin(future)
-            }
-        }
-
-        impl<'upper_bound, 'subject, T: 'subject> From<Pin<Box<dyn Future<Output = T> + Send + 'subject>>> for ScopedBoxFuture<'upper_bound, 'subject, T> {
-            fn from(future: Pin<Box<dyn Future<Output = T> + Send + 'subject>>) -> Self {
-                Box::pin(future)
-            }
-        }
-
-        impl<'upper_bound, 'subject, T: 'subject> From<Pin<Box<dyn Future<Output = T> + 'subject>>> for ScopedLocalBoxFuture<'upper_bound, 'subject, T> {
-            fn from(future: Pin<Box<dyn Future<Output = T> + 'subject>>) -> Self {
-                Box::pin(future)
-            }
-        }
-
-        impl<'upper_bound, 'subject, T: 'subject> From<Box<dyn Future<Output = T> + Send + 'subject>> for ScopedBoxFuture<'upper_bound, 'subject, T> {
-            fn from(future: Box<dyn Future<Output = T> + Send + 'subject>) -> Self {
-                Box::into_pin(future).into()
-            }
-        }
-
-        impl<'upper_bound, 'subject, T: 'subject> From<Box<dyn Future<Output = T> + 'subject>> for ScopedLocalBoxFuture<'upper_bound, 'subject, T> {
-            fn from(future: Box<dyn Future<Output = T> + 'subject>) -> Self {
-                Box::into_pin(future).into()
-            }
-        }
-
-        impl<'upper_bound, 'subject, T: 'subject> From<ScopedBoxFuture<'upper_bound, 'subject, T>> for Pin<Box<dyn Future<Output = T> + Send + 'subject>> {
-            fn from(future: ScopedBoxFuture<'upper_bound, 'subject, T>) -> Self {
-                Box::pin(future)
-            }
-        }
-
-        impl<'upper_bound, 'subject, T: 'subject> From<ScopedLocalBoxFuture<'upper_bound, 'subject, T>> for Pin<Box<dyn Future<Output = T> + 'subject>> {
-            fn from(future: ScopedLocalBoxFuture<'upper_bound, 'subject, T>) -> Self {
-                Box::pin(future)
-            }
+#[cfg(feature = "alloc")]
+const _: () = {
+    impl<'upper_bound, 'subject, T, Fut: Future<Output = T> + Send + 'subject> From<Pin<Box<Fut>>> for ScopedBoxFuture<'upper_bound, 'subject, T> {
+        fn from(future: Pin<Box<Fut>>) -> Self {
+            future
         }
     }
-}
+
+    impl<'upper_bound, 'subject, T, Fut: Future<Output = T> + 'subject> From<Pin<Box<Fut>>> for ScopedLocalBoxFuture<'upper_bound, 'subject, T> {
+        fn from(future: Pin<Box<Fut>>) -> Self {
+            future
+        }
+    }
+
+    impl<'upper_bound, 'subject, T, Fut: Future<Output = T> + Send + 'subject> From<Box<Fut>> for ScopedBoxFuture<'upper_bound, 'subject, T> {
+        fn from(future: Box<Fut>) -> Self {
+            Box::into_pin(future)
+        }
+    }
+
+    impl<'upper_bound, 'subject, T, Fut: Future<Output = T> + 'subject> From<Box<Fut>> for ScopedLocalBoxFuture<'upper_bound, 'subject, T> {
+        fn from(future: Box<Fut>) -> Self {
+            Box::into_pin(future)
+        }
+    }
+
+    impl<'upper_bound, 'subject, T: 'subject> From<Pin<Box<dyn Future<Output = T> + Send + 'subject>>> for ScopedBoxFuture<'upper_bound, 'subject, T> {
+        fn from(future: Pin<Box<dyn Future<Output = T> + Send + 'subject>>) -> Self {
+            Box::pin(future)
+        }
+    }
+
+    impl<'upper_bound, 'subject, T: 'subject> From<Pin<Box<dyn Future<Output = T> + 'subject>>> for ScopedLocalBoxFuture<'upper_bound, 'subject, T> {
+        fn from(future: Pin<Box<dyn Future<Output = T> + 'subject>>) -> Self {
+            Box::pin(future)
+        }
+    }
+
+    impl<'upper_bound, 'subject, T: 'subject> From<Box<dyn Future<Output = T> + Send + 'subject>> for ScopedBoxFuture<'upper_bound, 'subject, T> {
+        fn from(future: Box<dyn Future<Output = T> + Send + 'subject>) -> Self {
+            Box::into_pin(future).into()
+        }
+    }
+
+    impl<'upper_bound, 'subject, T: 'subject> From<Box<dyn Future<Output = T> + 'subject>> for ScopedLocalBoxFuture<'upper_bound, 'subject, T> {
+        fn from(future: Box<dyn Future<Output = T> + 'subject>) -> Self {
+            Box::into_pin(future).into()
+        }
+    }
+
+    impl<'upper_bound, 'subject, T: 'subject> From<ScopedBoxFuture<'upper_bound, 'subject, T>> for Pin<Box<dyn Future<Output = T> + Send + 'subject>> {
+        fn from(future: ScopedBoxFuture<'upper_bound, 'subject, T>) -> Self {
+            Box::pin(future)
+        }
+    }
+
+    impl<'upper_bound, 'subject, T: 'subject> From<ScopedLocalBoxFuture<'upper_bound, 'subject, T>> for Pin<Box<dyn Future<Output = T> + 'subject>> {
+        fn from(future: ScopedLocalBoxFuture<'upper_bound, 'subject, T>) -> Self {
+            Box::pin(future)
+        }
+    }
+};

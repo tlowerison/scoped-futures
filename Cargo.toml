@@ -13,7 +13,6 @@ keywords = ["scope", "future", "futures", "hrtb", "liftime"]
 include = ["**/*.rs", "Cargo.toml", "LICENSE-*"]
 
 [dependencies]
-cfg-if = "1.0"
 pin-utils = "0.1"
 
 [dev-dependencies]
