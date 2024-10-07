@@ -1,5 +1,9 @@
 # See https://pre-commit.com for more information
 # NOTE: must run `pre-commit install --hook-type pre-commit --hook-type pre-push`
+# Requires:
+# - cargo-clippy
+# - cargo-fmt
+# - cargo-semver-checks
 default_install_hook_types:
   - pre-commit
   - pre-push
@@ -47,3 +51,12 @@ repos:
         language: system
         types: [rust]
         args: ["--"]
+
+      - id: cargo-semver-checks
+        name: cargo-semver-checks
+        description: verify no semver updates are needed
+        stages: [push]
+        entry: cargo semver-checks
+        language: system
+        types: [rust]
+        pass_filenames: false
